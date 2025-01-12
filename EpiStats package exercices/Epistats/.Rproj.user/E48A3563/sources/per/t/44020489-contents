@@ -1,0 +1,131 @@
+---
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      fig.align = 'center')
+```
+
+Loading packages
+```{r}
+library(EpiStats)
+library(tidyverse)
+library(knitr)
+```
+Load in data
+```{r}
+data("Tiramisu")
+glimpse(Tiramisu)
+head(Tiramisu)
+
+table(Tiramisu$tportion)
+
+tira <- Tiramisu
+
+```
+
+recoding all variables as binary
+
+```{r}
+tira <- tira %>% 
+  mutate(salmon = ifelse(salmon == 9, NA, salmon)) %>% 
+  mutate(horseradish = ifelse(horseradish == 9, NA, horseradish)) %>% 
+  mutate(pork = ifelse(pork == 9, NA, pork)) %>% 
+  mutate(sex01 = case_when(sex == "females" ~ 1,
+                           sex == "males" ~ 0)) %>% 
+  mutate(age_group = case_when(age >= 30 ~ 1,
+                               age < 30 ~ 0)) %>%
+  mutate(tportion = case_when(tportion == 0 ~ 0,
+                              tportion == 1 ~ 1,
+                              tportion >= 2 ~ 2)) %>% 
+  mutate(tportion = as.factor(tportion)) %>% 
+  as.data.frame(stringsAsFactors = TRUE)
+
+Colnames <- tira %>% select(-ill, -age, -dateonset, -sex, -uniquekey, -tportion, -mportion) %>% 
+  colnames()
+
+tira$ill <- factor(tira$ill, levels = c(1, 0), ordered = TRUE)
+tira$beer <- factor(tira$beer, levels = c(1, 0), ordered = TRUE)
+tira$tira <- factor(tira$tira, levels = c(1, 0), ordered = TRUE)
+tira$sex <- factor(tira$sex, levels = c("males", "females"), ordered = TRUE)
+
+tira
+ 
+```
+
+crosTable
+
+```{r}
+ct1 <- crossTable(tira, sex, tira, percent = "both")
+
+kable(ct1, align = "r")
+
+```
+crosTable ill - tira
+
+```{r}
+ret <- crossTable(tira, ill, tira)
+ret
+
+kable(ret, align = "r")
+```
+
+crostab ill - sex
+
+```{r}
+crossTable(tira, ill, sex, "col", "fisher")
+
+kable(crossTable(tira, ill, sex, "col", "fisher"), align = "r", caption = "with columns")
+```
+
+## COHORT STUDY
+
+### CS
+
+Ex: CS ill-mousse
+
+```{r}
+is.na(tira$tira)
+table(tira_nona$tira)
+tira_nona <- tira %>% drop_na()
+tira_nona
+
+# Ensure the column is numeric
+tira_nona <- tira_nona %>%
+  mutate(tira = as.numeric(tira))
+
+# Apply the transformation using mutate
+tira_nona <- tira_nona %>%
+  mutate(tira = ifelse(tira == 1, 0, ifelse(tira == 2, 1, tira)))
+
+tira
+
+CS(tira_nona, "tomato", "sex01", exact = TRUE, full = TRUE)
+
+CC(tira_nona, "tira", "sex01")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

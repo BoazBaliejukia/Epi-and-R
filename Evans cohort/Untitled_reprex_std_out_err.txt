@@ -1,0 +1,6 @@
+✖ Install the styler package in order to use `style = TRUE`.
+running: bash  -c 'echo "Hello Bash!";
+pwd;
+ls | head;'
+Building shared library for Rcpp code chunk...
+Output that would normally be lost

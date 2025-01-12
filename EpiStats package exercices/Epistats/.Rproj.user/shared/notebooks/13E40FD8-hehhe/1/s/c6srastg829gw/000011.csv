@@ -1,0 +1,2 @@
+"0",""
+"0","kable(crossTable(tira, ill, sex, ""col"", ""fisher""), align = ""r"", caption = ""with columns"")"
