@@ -1,5 +1,5 @@
 ---
-title: "Evans Cohort Secondary Analysis with EpiStats"
+title: "Evans Cohort Secondary Analysis with EpiStats and other useful packages"
 author: "Boaz Baliejukia"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
@@ -16,25 +16,24 @@ knitr::opts_chunk$set(
 )
 ```
 
+## Introduction 
 
-This is a secondary analysis of the Multiparameter Intelligent Monitoring in Intensive Care II
-database, consisting o 24,000 patients admitted to the Beth Israel Deaconess Medical Center
-ICU between 2001 and 2008. Patients requiring mechanical ventilation who did not require vasopressors
-or have a diagnosis of sepsis were identified (1776 patients), and the primary outcome was 28-day mortality. Our objective was to investigate the **association between the use of indwelling arterial catheters (IAC) and mortality in hemodynamically stable patients with respiratory failure**, using several methods like multivariate regression and stratification to adjust for confounding.
+This is a secondary analysis of the Multiparameter Intelligent Monitoring in Intensive Care II database, consisting of 24,000 patients admitted to the Beth Israel Deaconess Medical Center ICU between 2001 and 2008. Patients requiring mechanical ventilation who did not require vasopressors or have a diagnosis of sepsis were identified (1776 patients), and the primary outcome was 28-day mortality. Our objective was to investigate the **association between the use of indwelling arterial catheters (IAC) and mortality in hemodynamically stable patients with respiratory failure**, using several methods like multivariate regression and stratification to adjust for confounding.
+
 
 ## Loading useful packages
 
 ```{r, results='hide', message=FALSE}
 library(tidyverse) # for data handling
-library(EpiStats)  # for epidemiology
+library(EpiStats)  # Provides functions for epidemiological analysis
 library(knitr)      # to get well formatted tables
-library(rstatix)
-library(gtsummary)
-library(report)
-library(finalfit)
+library(rstatix)    # Provides a simple and intuitive pipe-friendly framework 
+library(gtsummary)  # Creates publication-ready summary tables for models
+library(report)     # Facilitates the creation of reports for statistical models
+library(finalfit)   # For final results tables and plots for publication
 ```
 
-## load in data
+## Load in data
 
 Let's load in the dataset from the project directory using the read.csv() function and call it catheter. The dataset has 46 variables and 1776 selected participants who met the inclusion criteria.
 ```{r}
@@ -155,52 +154,55 @@ The association between IAC and mortality exists in both strata appears to be hi
 
 ### 3. Multivariable model (Logistic regression) to adjust for confunding variables
 
-Let's create our model by considering multiple confounders and generating summary and ANOVA tables using the `glm()` function. We will specify the family as "binomial" for the logistic regression, as our response variable consists of binary data (death = 1 for yes or 0 for no) and call for the summary and anova tables.
+Let's build our model by including all variables of interest in the data frame using the `glm()` function. We will specify the family as "binomial" since we are performing logistic regression; our response variable consists of binary data, where death is coded as 1 for yes and 0 for no.
 
 ```{r}
-model.1 <- glm(death ~ IAC + age + sex + sofa + service_unit + COPD + 
-                 Other.resp.D + CHF + AF + chr.renal.D + chr.liver.D + 
-                 coronary.D + stroke + malignancy + wbc + hemoglobin + 
-                 platelet + sodium + potassium + bicarbonate + chloride + 
-                 urea + creat + po2 + pco2, 
-               variables.of.int, 
+model.1 <- glm(death ~ ., 
+              na.omit(variables.of.int), 
                family = "binomial")
-
 summary(model.1)
-anova(model.1)
 ```
 
-As it can be seen, the output is a bit messy. Therefore, we will be using the tbl_regression() from the "gtsummary" package to get a tidy table.
+To obtain the final model, we will be following the **Mixed Stepwise Selection** approach based the AIC criterion using the `step()` function.<br /> 
+In fact, Stepwise selection is a method for fitting regression models that involves the iterative selection of independent variables based on the Akaike Information Criterion (AIC) or the Bayesian Information Criterion (BIC).<br />
+It can be achieved through:<br />
+- **Forward selection**: starts with no variables and adds each new variable incrementally, testing for statistical significance.  
+- **Backward selection**: begins with a full model and then removes the least statistically significant variables one at a time.<br />
+- **Mixed selection**: combines both forward and backward selection to determine the best model.
 
 ```{r}
-tbl_regression(model.1, exponentiate = TRUE)
+# Select best model according to AIC using mixed selection
+model.1.best <- step(model.1,
+                     direction = "both",
+                     trace = FALSE)
+
+summary(model.1.best)
+```
+
+As it can be seen, the output is a bit messy. Therefore, we will be using the `tbl_regression()` from the "gtsummary" package to get a tidy table.
+
+```{r}
+tbl_regression(model.1.best, exponentiate = TRUE)
 ```
 
 Let's now get an automatic report of the model using the "report" package.
 
 ```{r, results='asis'}
-report(model.1)
+report(model.1.best)
 ```
 
-According to the model, only 9 predictor variables (age, sofa, other.resp.D, stroke, wbc, hemoglobine, bicarbonate, chloride and urea) had a significant effect on hospital mortality. If we were to reduce the model's equation to only these independent variables, the results could be as follow:
+The final model identified 11 predictor variables that significantly impacted hospital mortality: **age, sofa, other.resp.D, AF, stroke, wbc, hemoglobin, sodium, bicarbonate, chloride, and urea**. The presence of stroke increased the odds of death by approximately 7.66 times (95% CI: 5.07 to 11.7), while respiratory diseases (excluding COPD) increased the odds by about 2.03 times (95% CI: 1.44 to 2.87).  
 
-```{r}
-model.2 <- glm(death ~ age + sofa + Other.resp.D + stroke + wbc + hemoglobin + bicarbonate + chloride + urea, 
-               variables.of.int, 
-               family = "binomial")
+### 4. Summary table
 
-tbl_regression(model.2, exponentiate = TRUE)
-```
-
-#### I would like to create a summary table combining :
+**I would like to create a summary table combining :**
 - all univariable logistic regressions that are possible with the variables available in our dataframe,
 - a multivariable logistic regression that includes all variables available in our dataframe, and
 - a multivariable logistic regression that includes only some of variables available in our dataframe.
-- in addition to some descriptive statistics for each level of predictor variables.
 
 We start with all possible univariable logistic regressions
 
-```{r}
+```{r, message=FALSE}
 # Set response and predictor variables
 response <- "death"
 predictor <- c("IAC", "age", "sex", "sofa", "service_unit", "COPD", "Other.resp.D",
@@ -220,7 +222,7 @@ kable(glmuni)
 
 Here is the multivariable logistic regression with all variables
 
-```{r}
+```{r, message=FALSE}
 glmmulti_full <- variables.of.int %>% 
   glmmulti(response, predictor) %>%
   fit2df(explanatory_name = "Variables",
@@ -229,12 +231,12 @@ glmmulti_full <- variables.of.int %>%
 kable(glmmulti_full) 
 ```
 
-Here is the multivariable logistic regression with all variables
+Here is the multivariable logistic regression with variables of the best model identified by the stepwise selection.
 
-```{r}
+```{r, message=FALSE}
 # Set predictor variables to be included in the final model
-predictor_final <- c("age", "sofa", "Other.resp.D", "stroke", "wbc", "hemoglobin",
-                     "bicarbonate", "chloride", "urea")
+predictor_final <- c("age", "sofa", "Other.resp.D", "AF", "stroke", "wbc", 
+                     "hemoglobin", "sodium", "bicarbonate", "chloride", "urea")
 
 # Save results 
 glmmulti_final <- variables.of.int %>% 
@@ -245,27 +247,22 @@ glmmulti_final <- variables.of.int %>%
 kable(glmmulti_final) 
 ```
 
-Let's save descriptive statistics
+Here how we can merge all those 3 tables:
 
 ```{r}
-summary <- variables.of.int.recoded %>% 
-  summary_factorlist(response, predictor, fit_id = TRUE) 
+glmuni$index <- 1:nrow(glmuni) # to keep track of the original order 
 
-kable(summary) 
-```
+# We then merge the data frames
+finaltab <- glmuni %>% 
+  merge(glmmulti_full) %>% 
+  left_join(glmmulti_final, by = "Variables") 
 
-Here how we can merge all those 4 tables:
-
-```{r}
-finaltab <- summary %>% 
-  finalfit_merge(glmuni) %>% 
-  finalfit_merge(glmmulti_full) %>% 
-  finalfit_merge(glmmulti_final)
-
-finaltab %>% select(-fit_id, -index) %>% 
-  rename(Variables = label,
-         " " = levels) %>% 
-  kable()
+# Sort the merged data frame based on the original order
+finaltab <- finaltab[order(finaltab$index), ] %>% 
+  select(-index) 
+  
+rownames(finaltab) <- NULL
+kable(finaltab)
 ```
 
 
