@@ -1,0 +1,79 @@
+---
+title: "Propensity Score Matching"
+author: "Boaz Baliejukia"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: architect
+    highlight: github
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+# Loading packages
+
+```{r, message=FALSE}
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(MatchIt)
+```
+# Read in data
+
+```{r, message=FALSE}
+distress <- read_csv("https://raw.githubusercontent.com/gckc123/ExampleData/main/smoking_psyc_distress.csv")
+
+head(distress) %>% 
+  kable(align = "c", format = "html") %>% 
+  kable_styling(full_width = NULL, font_size = 13)
+  
+glimpse(distress)
+
+```
+There are ten variables in this dataset.
+
+* Sex (0: Female; 1: Male)
+* indigenous - Ingigenous status (0: Non-indigenous; 1: indigenous)
+* high_school - Education level (0: not finished high school; 1: finished high school)
+* partnered - Marital status (0: not partnered; 1: partnered)
+* remoteness - region of residence (0: major cities; 1: inner regional; 2: outer regional)
+* language - Language background (0: non-English speaking; 1: English speaking)
+* Smoker - Smoking status (0: non-smoker; 1: smoker)
+* risky_alcohol - Risky alcohol use (0: not risky; 1: risky)
+* psyc_distress - Psychological distress. Measure ranges from 10 to 50.
+* age - Age of the participants
+
+# Data handling
+
+The "remoteness" variable is categorical with more than 2 categories. We have to recode it as a factor
+
+```{r}
+distress$remoteness <- factor(distress$remoteness, exclude = c("", NA))
+```
+
+# Matching
+
+```{r}
+match_obj <- matchit(smoker ~ sex + indigeneity + high_school + partnered + remoteness + language + risky_alcohol + age,
+                     data = distress, method = "nearest", distance = "glm",
+                     ratio = 1,
+                     replace = FALSE)
+summary(match_obj)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

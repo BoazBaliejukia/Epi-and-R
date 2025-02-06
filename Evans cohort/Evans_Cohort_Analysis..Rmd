@@ -1,0 +1,272 @@
+---
+title: "Evans Cohort Analysis"
+author: "Boaz"
+date: "2025-02-06"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Introduction 
+
+This is a secondary analysis of the Multiparameter Intelligent Monitoring in Intensive Care II database, consisting of 24,000 patients admitted to the Beth Israel Deaconess Medical Center ICU between 2001 and 2008. Patients requiring mechanical ventilation who did not require vasopressors or have a diagnosis of sepsis were identified (1776 patients), and the primary outcome was 28-day mortality. Our objective was to investigate the **association between the use of indwelling arterial catheters (IAC) and mortality in hemodynamically stable patients with respiratory failure**, using several methods like multivariate regression and stratification to adjust for confounding.
+
+
+## Loading useful packages
+
+```{r, results='hide', message=FALSE}
+library(tidyverse) # for data handling
+library(EpiStats)  # Provides functions for epidemiological analysis
+library(knitr)      # to get well formatted tables
+library(rstatix)    # Provides a simple and intuitive pipe-friendly framework 
+library(gtsummary)  # Creates publication-ready summary tables for models
+library(report)     # Facilitates the creation of reports for statistical models
+library(finalfit)   # For final results tables and plots for publication
+```
+
+## Load in data
+
+Let's load in the dataset from the project directory using the read.csv() function and call it catheter. The dataset has 46 variables and 1776 selected participants who met the inclusion criteria.
+```{r}
+catheter <- read.csv("full_cohort_data.csv")
+
+glimpse(catheter)
+```
+
+## Data handling
+
+Let's select and rename variables of interest: the exposure (Use of IAC), the outcome (death) and potential confounders (age; sex; sofa score; service unit; coincident diseases like COPD and other respiratory diseases, congestive heart failure (CHF), Atrial fibrillation (AF), chronic renal disease, chronic liver diseases, coronary artery disease, stroke and malignancy; and laboratory tests such as wbc, hemoglobin, platelet, sodium, potassium, bicarbonate, chloride, urea, creatinine, po2 and pco2 .
+
+lack of pneumonia, DNR at admission and Change in code status during ICU admission.
+```{r}
+variables.of.int <- catheter %>% 
+  select(IAC = aline_flg, 
+         death = day_28_flg, 
+         age, 
+         sex = gender_num, 
+         sofa = sofa_first, 
+         service_unit, 
+         COPD = copd_flg,
+         Other.resp.D = resp_flg, 
+         CHF = chf_flg, 
+         AF = afib_flg, 
+         chr.renal.D = renal_flg, 
+         chr.liver.D = liver_flg,
+         coronary.D = cad_flg, 
+         stroke = stroke_flg, 
+         malignancy = mal_flg, 
+         wbc = wbc_first, 
+         hemoglobin = hgb_first, 
+         platelet = platelet_first,
+         sodium = sodium_first, 
+         potassium = potassium_first,
+         bicarbonate = tco2_first, 
+         chloride = chloride_first,
+         urea = bun_first, 
+         creat = creatinine_first, 
+         po2 = po2_first,
+         pco2 = pco2_first)
+
+head(variables.of.int)
+```
+Let's recode categorical variables to get summary statistics table
+
+```{r}
+variables.of.int.recoded <- variables.of.int %>% 
+  mutate(IAC = case_when(IAC == 1 ~ "yes" , IAC == 0 ~ "no" )) %>% 
+  mutate(death = case_when(death == 1 ~ "yes" , death == 0 ~ "no" )) %>%
+  mutate(sex = case_when(sex == 1 ~ "male" , sex == 0 ~ "female" )) %>% 
+  mutate(COPD = case_when(COPD == 1 ~ "yes" , COPD == 0 ~ "no" )) %>%
+  mutate(Other.resp.D = case_when(Other.resp.D == 1 ~ "yes" , Other.resp.D == 0 ~ "no" )) %>%
+  mutate(CHF = case_when(CHF == 1 ~ "yes" , CHF == 0 ~ "no" )) %>%
+  mutate(AF = case_when(AF == 1 ~ "yes" , AF == 0 ~ "no" )) %>%
+  mutate(chr.renal.D = case_when(chr.renal.D == 1 ~ "yes" , chr.renal.D == 0 ~ "no" )) %>%
+  mutate(chr.liver.D = case_when(chr.liver.D == 1 ~ "yes" , chr.liver.D == 0 ~ "no" )) %>%
+  mutate(coronary.D = case_when(coronary.D == 1 ~ "yes" , coronary.D == 0 ~ "no" )) %>%
+  mutate(stroke = case_when(stroke == 1 ~ "yes" , stroke == 0 ~ "no" )) %>%
+  mutate(malignancy = case_when(malignancy == 1 ~ "yes" , malignancy == 0 ~ "no" ))
+
+head(variables.of.int.recoded)
+
+```
+
+Let's get summary statistics with the tbl_summary() function from the "gtsummary" package. This function is handy when dealing with both numerical and categorical data: <br />
+- Count and Percentage for categorical data <br />
+- Median and Quartiles for numeric data <br />
+
+
+```{r}
+tbl_summary(variables.of.int.recoded, 
+            missing = "no")
+```
+
+## Unmatched Cohorts Analysis
+
+### 1. Crude estimate of the association between IAC and hospital mortality
+
+Let's compute the crude estimates first using the CS() function from the EpiStats package. This function provides us with two tables: <br />
+- A 2x2 contingency table illustrates the exposure and outcome of interest.<br /> 
+- A table presents all possible estimates of the association.  
+
+```{r}
+result.1 <- CS(variables.of.int, death, IAC, exact = TRUE, full = FALSE)
+
+kable(result.1$df1, align = result.1$df1.align)
+kable(result.1$df2, align = result.1$df2.align)
+
+```
+
+Patients with an indwelling arterial catheter faced a **21%** (95%CI of -3% to 51%) to higher mortality risk compared to those without it. Additionally, **10%** of deaths can be attributed to the use of indwelling arterial catheters in ICU patients who require mechanical ventilation and are hemodynamically stable. However, this association is not significant (chi2 p = 0.085)
+
+**When working with multiple exposures, the CSTable() function can be quite useful providing with a single table.**
+
+Let's say sex, COPD, Other.resp.D, CHF, chr.renal.D and AF are exposures too.
+
+```{r}
+result.2 <- CSTable(variables.of.int, "death", 
+        exposure = c("IAC", "sex", "COPD", "Other.resp.D", "CHF", "chr.renal.D", "AF"),
+        exact = TRUE,
+        sort = "rr",
+        full = TRUE)
+kable(result.2$df, align = result.2$align)
+```
+
+### 2. Adjusting for confounding variables using stratification
+
+Next, we will stratify the cohort by service unit type (MICU, SICU, FICU) and compute the estimates within each stratum using the function CSInter(). 
+
+```{r}
+result.3 <- CSInter(variables.of.int, "death", "IAC", by = "service_unit", full = TRUE)
+
+kable(result.3$df1, align = result.3$align)
+kable(result.3$df2, align = result.3$align)
+```
+The association between IAC and mortality exists in both strata appears to be higher in the MICU, with a risk ratio of 1.46. Furthermore, the *Mantel Heaenszel risk ratio* was **1.30**	(1.04-1.64) meaning that the effect (1.21) was underestimated by the service unit type.
+
+### 3. Multivariable model (Logistic regression) to adjust for confunding variables
+
+Let's build our model by including all variables of interest in the data frame using the `glm()` function. We will specify the family as "binomial" since we are performing logistic regression; our response variable consists of binary data, where death is coded as 1 for yes and 0 for no.
+
+```{r}
+model.1 <- glm(death ~ ., 
+              na.omit(variables.of.int), 
+               family = "binomial")
+summary(model.1)
+```
+
+To obtain the final model, we will be following the **Mixed Stepwise Selection** approach based the AIC criterion using the `step()` function.<br /> 
+In fact, Stepwise selection is a method for fitting regression models that involves the iterative selection of independent variables based on the Akaike Information Criterion (AIC) or the Bayesian Information Criterion (BIC).<br />
+It can be achieved through:<br />
+- **Forward selection**: starts with no variables and adds each new variable incrementally, testing for statistical significance.<br />  
+- **Backward selection**: begins with a full model and then removes the least statistically significant variables one at a time.<br />
+- **Mixed selection**: combines both forward and backward selection to determine the best model.
+
+```{r}
+# Select best model according to AIC using mixed selection
+model.1.best <- step(model.1,
+                     direction = "both",
+                     trace = FALSE)
+
+summary(model.1.best)
+```
+
+As it can be seen, the output is a bit messy. Therefore, we will be using the `tbl_regression()` from the "gtsummary" package to get a tidy table.
+
+```{r}
+tbl_regression(model.1.best, exponentiate = TRUE)
+```
+
+Let's now get an automatic report of the model using the "report" package.
+
+```{r, results='asis'}
+report(model.1.best)
+```
+
+The final model identified 11 predictor variables that significantly impacted hospital mortality: **age, sofa, other.resp.D, AF, stroke, wbc, hemoglobin, sodium, bicarbonate, chloride, and urea**. The presence of stroke increased the odds of death by approximately 7.66 times (95% CI: 5.07 to 11.7), while respiratory diseases (excluding COPD) increased the odds by about 2.03 times (95% CI: 1.44 to 2.87).  
+
+### 4. Summary table
+
+**I would like to create a summary table combining :**
+- all univariable logistic regressions that are possible with the variables available in our dataframe,
+- a multivariable logistic regression that includes all variables available in our dataframe, and
+- a multivariable logistic regression that includes only some of variables available in our dataframe.
+
+We start with all possible univariable logistic regressions
+
+```{r, message=FALSE}
+# Set response and predictor variables
+response <- "death"
+predictor <- c("IAC", "age", "sex", "sofa", "service_unit", "COPD", "Other.resp.D",
+               "CHF", "AF", "chr.renal.D", "chr.liver.D", "coronary.D", "stroke",
+               "malignancy", "wbc", "hemoglobin", "platelet", "sodium", "potassium",
+               "bicarbonate", "chloride", "urea", "creat", "po2", "pco2")
+
+# Save results 
+glmuni <- variables.of.int %>% 
+  glmuni(response, predictor) %>%
+  fit2df(explanatory_name = "Variables",
+         estimate_name = "Crude OR",
+         estimate_suffix = " (95% CI, p value)")
+
+kable(glmuni) 
+```
+
+Here is the multivariable logistic regression with all variables
+
+```{r, message=FALSE}
+glmmulti_full <- variables.of.int %>% 
+  glmmulti(response, predictor) %>%
+  fit2df(explanatory_name = "Variables",
+         estimate_name = "Adjusted OR - full model")
+
+kable(glmmulti_full) 
+```
+
+Here is the multivariable logistic regression with variables of the best model identified by the stepwise selection.
+
+```{r, message=FALSE}
+# Set predictor variables to be included in the final model
+predictor_final <- c("age", "sofa", "Other.resp.D", "AF", "stroke", "wbc", 
+                     "hemoglobin", "sodium", "bicarbonate", "chloride", "urea")
+
+# Save results 
+glmmulti_final <- variables.of.int %>% 
+  glmuni(response, predictor_final) %>%
+  fit2df(explanatory_name = "Variables",
+         estimate_name = "Adjusted OR - final model")
+
+kable(glmmulti_final) 
+```
+
+Here how we can merge all those 3 tables:
+
+```{r}
+glmuni$index <- 1:nrow(glmuni) # to keep track of the original order 
+
+# We then merge the data frames
+finaltab <- glmuni %>% 
+  merge(glmmulti_full) %>% 
+  left_join(glmmulti_final, by = "Variables") 
+
+# Sort the merged data frame based on the original order
+finaltab <- finaltab[order(finaltab$index), ] %>% 
+  select(-index) 
+  
+rownames(finaltab) <- NULL
+kable(finaltab)
+```
+
+
+
+
+
+
+
