@@ -1,5 +1,5 @@
 ---
-title: "Evans Cohort Analysis"
+title: "*Evans Cohort Analysis*"
 author: "Boaz"
 date: "2025-02-06"
 output:
@@ -194,8 +194,8 @@ The final model identified 11 predictor variables that significantly impacted ho
 
 ### 4. Summary table
 
-**I would like to create a summary table combining :**
-- all univariable logistic regressions that are possible with the variables available in our dataframe,
+I would like to create a summary table combining : <br>
+- all univariable logistic regressions that are possible with the variables available in our dataframe,<br>
 - a multivariable logistic regression that includes all variables available in our dataframe, and
 - a multivariable logistic regression that includes only some of variables available in our dataframe.
 
@@ -246,7 +246,7 @@ glmmulti_final <- variables.of.int %>%
 kable(glmmulti_final) 
 ```
 
-Here how we can merge all those 3 tables:
+Here is how we can merge all those 3 tables:
 
 ```{r}
 glmuni$index <- 1:nrow(glmuni) # to keep track of the original order 
